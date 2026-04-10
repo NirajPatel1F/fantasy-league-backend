@@ -10,7 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 1. Configure CORS
+// 1. Configure CORS & HTTP Client
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
@@ -37,8 +37,9 @@ builder.Services.AddHttpClient("ScraperClient", client =>
 });
 
 // 3. Configure SQLite
+var dbPath = Environment.GetEnvironmentVariable("DB_PATH") ?? "fantasy.db";
 builder.Services.AddDbContext<FantasyDbContext>(options =>
-    options.UseSqlite("Data Source=fantasy.db"));
+    options.UseSqlite($"Data Source={dbPath}"));
 
 var app = builder.Build();
 
@@ -58,6 +59,32 @@ using (var scope = app.Services.CreateScope())
 
 // Global JSON Options to ensure React reads camelCase properly
 var jsonOpts = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+
+static void SeedDatabase(FantasyDbContext db)
+{
+    if (db.Teams.Any()) return;
+    var rawData = new Dictionary<string, string>
+    {
+        {"DIPAM Drillers", "D. Miller, K.L. RAHUL(VC), Riyan Parag, H. Klaasen, Rahane, Dhruv Jurel, Kamindu Mendis, Shahrukh khan, Rahul tewatiya, Rinku Singh, Sunil Narine(C), R. Jadeja, KG Rabada, T. Natarajan"},
+        {"PRIYANK", "Vaibhav Suryavanshi, Ishan Kishan(C), Tristan Stubbs, Ruturaj Gaikwad, Glenn Phillips, Sherfane Rutherford, Ayush Badoni, Axar Patel(VC), Azmatullah Omarzai, Washington Sundar, Venkatesh Iyer, Liam Livingstone, Vipraj Nigam, Kuldeep Yadav, Ravi bishnoi"},
+        {"UTKARSH", "Tilak verma, Shimron Hetmyer(C), Tim David, Devdutt Padikkal, Nehal Wadhera, Angkrish Raghuvanshi, Nitish Kumar Reddy, Romario Shepherd(VC), Krunal Pandya, Ashutosh Sharma, Shashank Singh, Shardul Thakur, Josh Hazlewood, Yuzvendra Chahal, Noor Ahmad"},
+        {"CHINTU Champions", "Jitesh Sharma, Quinton De Kock, Shubman Gill(C), Shreyas Iyer(VC), Aiden Markram, Rajat Patidar, Karun Nair, Mitchell Marsh, Rachin Ravindra, Jamie Overton, Varun Chakravarthy, Deepak Chahar, Avesh Khan, Mukesh Kumar, Ishant Sharma"},
+        {"KARAN Clashers", "Rishabh Pant, Phil Salt(VC), Prabhsimran Singh, Dewald Brevis, Priyansh Arya, Rovman Powell, Hardik Pandya(C), Corbin Bosch, Arshdeep Singh, Trent Boult, Harshal Patel, Tushar Deshpande, Jaydev Unadkat, Sandeep Sharma, Mayank Markande"},
+        {"VEDANSH Warriors", "Sanju Samson(VC), Ryan Rickelton, Abhishek Porel, Sai Sudharsan(C), Rohit Sharma, Ayush Mhatre, Nitish Rana, David Miller, Shivam Dube, Jacob Bethell, Sameer Rizvi, R. Sai Kishore, Digvesh Rathi, Zeeshan Ansari, Anshul Kamboj"},
+        {"J.D. GUJJU TOLI", "Jos Buttler, MS Dhoni, Urvil Patel, Yashasvi Jaiswal, Cameron Green, Naman Dhir, Abhishek Sharma(C), Marco Jansen, Shahbaz Ahmed, Jasprit Bumrah(VC), Prasidh Krishna, Jofra Archer, Khaleel Ahmed"},
+        {"JAY", "Nicholas Pooran, Virat Kohli(C), Travis Head(VC), Suryakumar Yadav, Marcus Stoinis, Will Jacks, Rashid Khan, Mohammad Siraj, Bhuvneshwar Kumar, Abdul samad, Umran Malik, Vaibhav Arora, Harnoor pannu, Prashant veer"},
+
+    };
+    foreach (var teamRaw in rawData) {
+        var team = new Team { Owner = teamRaw.Key };
+        foreach (var rawName in teamRaw.Value.Split(',').Select(p => p.Trim())) {
+            var name = rawName.Replace("(C)", "").Replace("(VC)", "").Trim();
+            team.Players.Add(new Player { Name = name, Role = rawName.Contains("(C)") ? "Captain" : rawName.Contains("(VC)") ? "Vice Captain" : "Player", Multiplier = rawName.Contains("(C)") ? 2.0 : rawName.Contains("(VC)") ? 1.5 : 1.0 });
+        }
+        db.Teams.Add(team);
+    }
+    db.SaveChanges();
+}	
 
 // ==========================================
 // API ENDPOINTS
@@ -453,33 +480,6 @@ app.MapDelete("/api/sync", async (FantasyDbContext db) =>
 });
 
 app.Run("http://localhost:5000");
-
-static void SeedDatabase(FantasyDbContext db)
-{
-    if (db.Teams.Any()) return;
-    var rawData = new Dictionary<string, string>
-    {
-        {"DIPAM Drillers", "D. Miller, K.L. RAHUL(VC), Riyan Parag, H. Klaasen, Rahane, Dhruv Jurel, Kamindu Mendis, Shahrukh khan, Rahul tewatiya, Rinku Singh, Sunil Narine(C), R. Jadeja, KG Rabada, T. Natarajan"},
-        {"PRIYANK", "Vaibhav Suryavanshi, Ishan Kishan(C), Tristan Stubbs, Ruturaj Gaikwad, Glenn Phillips, Sherfane Rutherford, Ayush Badoni, Axar Patel(VC), Azmatullah Omarzai, Washington Sundar, Venkatesh Iyer, Liam Livingstone, Vipraj Nigam, Kuldeep Yadav, Ravi bishnoi"},
-        {"UTKARSH", "Tilak verma, Shimron Hetmyer(C), Tim David, Devdutt Padikkal, Nehal Wadhera, Angkrish Raghuvanshi, Nitish Kumar Reddy, Romario Shepherd(VC), Krunal Pandya, Ashutosh Sharma, Shashank Singh, Shardul Thakur, Josh Hazlewood, Yuzvendra Chahal, Noor Ahmad"},
-        {"CHINTU Champions", "Jitesh Sharma, Quinton De Kock, Shubman Gill(C), Shreyas Iyer(VC), Aiden Markram, Rajat Patidar, Karun Nair, Mitchell Marsh, Rachin Ravindra, Jamie Overton, Varun Chakravarthy, Deepak Chahar, Avesh Khan, Mukesh Kumar, Ishant Sharma"},
-        {"KARAN Clashers", "Rishabh Pant, Phil Salt(VC), Prabhsimran Singh, Dewald Brevis, Priyansh Arya, Rovman Powell, Hardik Pandya(C), Corbin Bosch, Arshdeep Singh, Trent Boult, Harshal Patel, Tushar Deshpande, Jaydev Unadkat, Sandeep Sharma, Mayank Markande"},
-        {"VEDANSH Warriors", "Sanju Samson(VC), Ryan Rickelton, Abhishek Porel, Sai Sudharsan(C), Rohit Sharma, Ayush Mhatre, Nitish Rana, David Miller, Shivam Dube, Jacob Bethell, Sameer Rizvi, R. Sai Kishore, Digvesh Rathi, Zeeshan Ansari, Anshul Kamboj"},
-        {"J.D. GUJJU TOLI", "Jos Buttler, MS Dhoni, Urvil Patel, Yashasvi Jaiswal, Cameron Green, Naman Dhir, Abhishek Sharma(C), Marco Jansen, Shahbaz Ahmed, Jasprit Bumrah(VC), Prasidh Krishna, Jofra Archer, Khaleel Ahmed"},
-        {"JAY", "Nicholas Pooran, Virat Kohli(C), Travis Head(VC), Suryakumar Yadav, Marcus Stoinis, Will Jacks, Rashid Khan, Mohammad Siraj, Bhuvneshwar Kumar, Abdul samad, Umran Malik, Vaibhav Arora, Harnoor pannu, Prashant veer"},
-
-    };
-    foreach (var teamRaw in rawData) {
-        var team = new Team { Owner = teamRaw.Key };
-        foreach (var rawName in teamRaw.Value.Split(',').Select(p => p.Trim())) {
-            var name = rawName.Replace("(C)", "").Replace("(VC)", "").Trim();
-            team.Players.Add(new Player { Name = name, Role = rawName.Contains("(C)") ? "Captain" : rawName.Contains("(VC)") ? "Vice Captain" : "Player", Multiplier = rawName.Contains("(C)") ? 2.0 : rawName.Contains("(VC)") ? 1.5 : 1.0 });
-        }
-        db.Teams.Add(team);
-    }
-    db.SaveChanges();
-}	
-
 
 // ==========================================
 // DREAM11 ENGINE LOGIC
