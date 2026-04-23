@@ -10,6 +10,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+var port = Environment.GetEnvironmentVariable("PORT") ?? "5000";
+var url = $"http://0.0.0.0:{port}"; // Bound to 0.0.0.0 for GCP capability
+var target = Environment.GetEnvironmentVariable("TARGET") ?? "World";
+
 // 1. Configure CORS & HTTP Client
 builder.Services.AddCors(options =>
 {
@@ -65,15 +69,14 @@ static void SeedDatabase(FantasyDbContext db)
     if (db.Teams.Any()) return;
     var rawData = new Dictionary<string, string>
     {
-        {"DIPAM Drillers", "D. Miller, K.L. RAHUL(VC), Riyan Parag, H. Klaasen, Rahane, Dhruv Jurel, Kamindu Mendis, Shahrukh khan, Rahul tewatiya, Rinku Singh, Sunil Narine(C), R. Jadeja, KG Rabada, T. Natarajan"},
-        {"PRIYANK", "Vaibhav Suryavanshi, Ishan Kishan(C), Tristan Stubbs, Ruturaj Gaikwad, Glenn Phillips, Sherfane Rutherford, Ayush Badoni, Axar Patel(VC), Azmatullah Omarzai, Washington Sundar, Venkatesh Iyer, Liam Livingstone, Vipraj Nigam, Kuldeep Yadav, Ravi bishnoi"},
-        {"UTKARSH", "Tilak verma, Shimron Hetmyer(C), Tim David, Devdutt Padikkal, Nehal Wadhera, Angkrish Raghuvanshi, Nitish Kumar Reddy, Romario Shepherd(VC), Krunal Pandya, Ashutosh Sharma, Shashank Singh, Shardul Thakur, Josh Hazlewood, Yuzvendra Chahal, Noor Ahmad"},
+        {"DIPAM Drillers", "D. Miller, K.L. RAHUL(VC), Riyan Parag, H. Klaasen, Rahane, Dhruv Jurel, Kamindu Mendis, Shahrukh khan, Rahul Tewatia, Rinku Singh, Sunil Narine(C), R. Jadeja, Kagiso Rabada, T. Natarajan"},
+        {"PRIYANK", "Vaibhav Sooryavanshi, Ishan Kishan(C), Tristan Stubbs, Ruturaj Gaikwad, Glenn Phillips, Sherfane Rutherford, Ayush Badoni, Axar Patel(VC), Azmatullah Omarzai, Washington Sundar, Venkatesh Iyer, Liam Livingstone, Vipraj Nigam, Kuldeep Yadav, Ravi bishnoi"},
+        {"UTKARSH", "Tilak Varma, Shimron Hetmyer(C), Tim David, Devdutt Padikkal, Nehal Wadhera, Angkrish Raghuvanshi, Nitish Kumar Reddy, Romario Shepherd(VC), Krunal Pandya, Ashutosh Sharma, Shashank Singh, Shardul Thakur, Josh Hazlewood, Yuzvendra Chahal, Noor Ahmad"},
         {"CHINTU Champions", "Jitesh Sharma, Quinton De Kock, Shubman Gill(C), Shreyas Iyer(VC), Aiden Markram, Rajat Patidar, Karun Nair, Mitchell Marsh, Rachin Ravindra, Jamie Overton, Varun Chakravarthy, Deepak Chahar, Avesh Khan, Mukesh Kumar, Ishant Sharma"},
         {"KARAN Clashers", "Rishabh Pant, Phil Salt(VC), Prabhsimran Singh, Dewald Brevis, Priyansh Arya, Rovman Powell, Hardik Pandya(C), Corbin Bosch, Arshdeep Singh, Trent Boult, Harshal Patel, Tushar Deshpande, Jaydev Unadkat, Sandeep Sharma, Mayank Markande"},
         {"VEDANSH Warriors", "Sanju Samson(VC), Ryan Rickelton, Abhishek Porel, Sai Sudharsan(C), Rohit Sharma, Ayush Mhatre, Nitish Rana, David Miller, Shivam Dube, Jacob Bethell, Sameer Rizvi, R. Sai Kishore, Digvesh Rathi, Zeeshan Ansari, Anshul Kamboj"},
-        {"J.D. GUJJU TOLI", "Jos Buttler, MS Dhoni, Urvil Patel, Yashasvi Jaiswal, Cameron Green, Naman Dhir, Abhishek Sharma(C), Marco Jansen, Shahbaz Ahmed, Jasprit Bumrah(VC), Prasidh Krishna, Jofra Archer, Khaleel Ahmed"},
-        {"JAY", "Nicholas Pooran, Virat Kohli(C), Travis Head(VC), Suryakumar Yadav, Marcus Stoinis, Will Jacks, Rashid Khan, Mohammad Siraj, Bhuvneshwar Kumar, Abdul samad, Umran Malik, Vaibhav Arora, Harnoor pannu, Prashant veer"},
-
+        {"J.D. GUJJU TOLI", "Jos Buttler, MS Dhoni, Urvil Patel, Yashasvi Jaiswal, Cameron Green, Naman Dhir, Abhishek Sharma(C), Marco Jansen, Shahbaz Ahmed, Jasprit Bumrah(VC), Prasidh Krishna, Jofra Archer, Khaleel Ahmed, Pathum Nissanka, Mnusheer Khan"},
+        {"JAY", "Nicholas Pooran, Virat Kohli(C), Travis Head(VC), Suryakumar Yadav, Marcus Stoinis, Will Jacks, Rashid Khan, Mohammed Siraj, Bhuvneshwar Kumar, Abdul samad, Umran Malik, Vaibhav Arora, Harnoor pannu, Prashant veer"}
     };
     foreach (var teamRaw in rawData) {
         var team = new Team { Owner = teamRaw.Key };
@@ -84,12 +87,12 @@ static void SeedDatabase(FantasyDbContext db)
         db.Teams.Add(team);
     }
     db.SaveChanges();
-}	
+}   
 
 // ==========================================
 // API ENDPOINTS
 // ==========================================
-
+app.MapGet("/", () => $"Hello {target}!");
 app.MapGet("/api/settings", async (FantasyDbContext db) =>
 {
     var settings = await db.Settings.FirstOrDefaultAsync() ?? new Setting();
@@ -203,19 +206,15 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
     if (string.IsNullOrEmpty(inputUrl))
         return Results.BadRequest("Please paste a Cricinfo 'Match Results' URL or a comma-separated list of 'full-scorecard' URLs into the Series ID field.");
 
-    // Using the heavily configured "ScraperClient" with Brotli/Gzip support
     var client = httpClientFactory.CreateClient("ScraperClient");
 
-    // Helper function to safely fetch HTML directly OR via a proxy if blocked
     async Task<string> GetHtmlAsync(string targetUrl)
     {
-        // Strict Cloudflare check: look for Access Denied or Just a moment pages
         bool IsValidHtml(string? h) => !string.IsNullOrEmpty(h) 
             && !h.Contains("<title>Just a moment...</title>") 
             && !h.Contains("Access Denied") 
             && !h.ToLower().Contains("cloudflare");
 
-        // Strategy 1: Direct Request (Now highly effective due to DecompressionMethods in client)
         try
         {
             var req = new HttpRequestMessage(HttpMethod.Get, targetUrl) { Version = new Version(1, 1) };
@@ -228,10 +227,9 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
         }
         catch { }
 
-        // Strategy 2: AllOrigins RAW (Returns pure HTML, bypassing CORS/Cloudflare)
         try
         {
-            var proxyUrl = $"https://api.allorigins.win/raw?url={Uri.EscapeDataString(targetUrl)}";
+            var proxyUrl = $"https://corsproxy.io/?{Uri.EscapeDataString(targetUrl)}";
             var proxyRes = await client.GetAsync(proxyUrl);
             if (proxyRes.IsSuccessStatusCode)
             {
@@ -241,14 +239,15 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
         }
         catch { }
 
-        // Strategy 3: CodeTabs Proxy
         try
         {
-            var proxyUrl = $"https://api.codetabs.com/v1/proxy?quest={Uri.EscapeDataString(targetUrl)}";
+            var proxyUrl = $"https://api.allorigins.win/get?url={Uri.EscapeDataString(targetUrl)}";
             var proxyRes = await client.GetAsync(proxyUrl);
             if (proxyRes.IsSuccessStatusCode)
             {
-                var html = await proxyRes.Content.ReadAsStringAsync();
+                var jsonStr = await proxyRes.Content.ReadAsStringAsync();
+                var proxyJson = JsonNode.Parse(jsonStr);
+                var html = proxyJson?["contents"]?.ToString();
                 if (IsValidHtml(html)) return html;
             }
         }
@@ -259,7 +258,6 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
 
     var matchUrls = new HashSet<string>();
 
-    // Support both direct scorecard links AND series result pages
     if (inputUrl.Contains(","))
     {
         foreach (var url in inputUrl.Split(','))
@@ -281,15 +279,11 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
                 foreach (var link in links)
                 {
                     var href = link.GetAttributeValue("href", "");
-                    
-                    // Match links like /series/tournament-name/match-name-12345/anything
                     var matchRegex = Regex.Match(href, @"/series/([^/]+)/([^/]+-(\d+))(?:/.*)?$");
                     if (matchRegex.Success)
                     {
                         var seriesSlug = matchRegex.Groups[1].Value;
                         var matchSlug = matchRegex.Groups[2].Value;
-                        
-                        // Exclude non-match links. Matches usually have "vs", "match", or "final"
                         if (matchSlug.Contains("match") || matchSlug.Contains("vs") || matchSlug.Contains("final") || matchSlug.Contains("qualifier")) 
                         {
                             matchUrls.Add($"https://www.espncricinfo.com/series/{seriesSlug}/{matchSlug}/full-scorecard");
@@ -298,7 +292,6 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
                 }
             }
 
-            // Super Fallback: If links are completely hidden in React/Next.js JSON state
             if (!matchUrls.Any())
             {
                 var rawMatches = Regex.Matches(html, @"/series/([^/\""']+)/([^/\""']+-(\d+))/full-scorecard");
@@ -322,7 +315,6 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
 
     foreach (var url in matchUrls)
     {
-        // Extract a unique match ID from the URL using Regex (e.g., ...1st-match-1422119/full-scorecard)
         var matchIdMatch = Regex.Match(url, @"-([0-9]+)/full-scorecard");
         var matchId = matchIdMatch.Success ? matchIdMatch.Groups[1].Value : url;
 
@@ -331,18 +323,70 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
         HtmlDocument matchDoc = new HtmlDocument();
         try 
         { 
-            // Use the robust helper for individual scorecards too
             var matchHtml = await GetHtmlAsync(url);
             matchDoc.LoadHtml(matchHtml);
         } 
         catch { continue; }
 
-        var playersInMatch = new Dictionary<string, RawStats>();
+        // ==========================================
+        // SMART PLAYER NAME UNIFICATION
+        // Solves the "iyer" vs "Shreyas Iyer" duplication bug
+        // ==========================================
+        var playersInMatch = new Dictionary<string, RawStats>(StringComparer.OrdinalIgnoreCase);
+        
         RawStats GetPlayer(string rawName)
         {
+            // Clean up name tags
             rawName = rawName.Replace("(c)", "").Replace("†", "").Replace("&dagger;", "").Replace("(c)†", "").Trim();
-            if (!playersInMatch.ContainsKey(rawName)) playersInMatch[rawName] = new RawStats { Name = rawName };
-            return playersInMatch[rawName];
+            if (rawName.EndsWith("(sub)")) rawName = rawName.Replace("(sub)", "").Trim();
+
+            // 1. Exact match (case-insensitive because we initialized dictionary with OrdinalIgnoreCase)
+            if (playersInMatch.TryGetValue(rawName, out var existing))
+            {
+                // If the new variation is properly capitalized and the old one wasn't, upgrade it
+                if (rawName.Any(char.IsUpper) && !existing.Name.Any(char.IsUpper)) existing.Name = rawName;
+                return existing;
+            }
+
+            // 2. Fuzzy Match (Finds "Shreyas Iyer" when passed "iyer", or vice-versa)
+            string matchedKey = null;
+            var incParts = rawName.ToLower().Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var key in playersInMatch.Keys)
+            {
+                var kParts = key.ToLower().Split(new[] { ' ', '-' }, StringSplitOptions.RemoveEmptyEntries);
+                if (kParts.Length > 0 && incParts.Length > 0 && kParts.Last() == incParts.Last())
+                {
+                    // If one is just a surname OR they share the same first initial
+                    if (kParts.Length == 1 || incParts.Length == 1 || kParts[0][0] == incParts[0][0])
+                    {
+                        matchedKey = key;
+                        break;
+                    }
+                }
+            }
+
+            if (matchedKey != null)
+            {
+                var stats = playersInMatch[matchedKey];
+                // Upgrade the dictionary key and name if the new name is more complete
+                if (rawName.Length > matchedKey.Length)
+                {
+                    stats.Name = rawName; 
+                    playersInMatch.Remove(matchedKey);
+                    playersInMatch[rawName] = stats;
+                }
+                else if (rawName.Any(char.IsUpper) && !stats.Name.Any(char.IsUpper))
+                {
+                    stats.Name = rawName; 
+                }
+                return stats;
+            }
+
+            // 3. Completely new player found
+            var newStats = new RawStats { Name = rawName };
+            playersInMatch[rawName] = newStats;
+            return newStats;
         }
 
         // --- SCRAPE BATTING TABLES ---
@@ -351,7 +395,6 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
         {
             foreach (var table in battingTables)
             {
-                // Find column indices dynamically just in case ESPN changes their table layout!
                 int rIdx = 2, bIdx = 3, foursIdx = 5, sixesIdx = 6;
                 var headers = table.SelectNodes(".//th");
                 if (headers != null) {
@@ -382,23 +425,72 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
                         int.TryParse(tds[foursIdx].InnerText.Trim(), out int fours); p.Fours += fours;
                         int.TryParse(tds[sixesIdx].InnerText.Trim(), out int sixes); p.Sixes += sixes;
 
-                        // Parse Fielders & Dismissal Bonuses
-                        var dis = p.Dismissal.ToLower();
-                        if (dis.StartsWith("c ")) {
+                        // ==========================================
+                        // SMART DISMISSAL / FIELDING PARSER
+                        // ==========================================
+                        var dis = p.Dismissal.ToLower().Replace("†", "").Trim();
+                        
+                        // Fix 1: Properly award caught & bowled points to the bowler
+                        if (dis.StartsWith("c & b "))
+                        {
+                            var bowler = dis.Substring(6).Trim();
+                            GetPlayer(bowler).Catches += 1;
+                        }
+                        // Catch
+                        else if (dis.StartsWith("c "))
+                        {
                             int bIdxStr = dis.IndexOf(" b ");
-                            if (bIdxStr > 2) GetPlayer(dis.Substring(2, bIdxStr - 2).Trim()).Catches += 1;
+                            if (bIdxStr > 2)
+                            {
+                                var fName = dis.Substring(2, bIdxStr - 2).Trim();
+                                if (fName.StartsWith("sub (") && fName.EndsWith(")")) fName = fName.Substring(5, fName.Length - 6);
+                                GetPlayer(fName).Catches += 1;
+                            }
                         }
-                        if (dis.Contains("st ")) {
-                            int stIdx = dis.IndexOf("st "); int bIdxStr = dis.IndexOf(" b ");
-                            if (stIdx >= 0 && bIdxStr > stIdx + 3) GetPlayer(dis.Substring(stIdx + 3, bIdxStr - stIdx - 3).Trim()).Stumpings += 1;
+                        
+                        // Stumping
+                        if (dis.Contains("st "))
+                        {
+                            int stIdx = dis.IndexOf("st "); 
+                            int bIdxStr = dis.IndexOf(" b ");
+                            if (stIdx >= 0 && bIdxStr > stIdx + 3)
+                            {
+                                var fName = dis.Substring(stIdx + 3, bIdxStr - stIdx - 3).Trim();
+                                if (fName.StartsWith("sub (") && fName.EndsWith(")")) fName = fName.Substring(5, fName.Length - 6);
+                                GetPlayer(fName).Stumpings += 1;
+                            }
                         }
-                        if (dis.Contains("run out")) {
-                            var start = dis.IndexOf('('); var end = dis.IndexOf(')');
-                            if (start >= 0 && end > start) GetPlayer(dis.Substring(start + 1, end - start - 1).Split('/')[0].Trim()).Runouts += 1;
+                        
+                        // Run Out (Fixes picking up 'direct hit' string as a player)
+                        if (dis.Contains("run out"))
+                        {
+                            var start = dis.IndexOf('('); 
+                            var end = dis.IndexOf(')');
+                            if (start >= 0 && end > start)
+                            {
+                                var fieldersStr = dis.Substring(start + 1, end - start - 1);
+                                var fielders = fieldersStr.Split(new[] { '/', ',' }, StringSplitOptions.RemoveEmptyEntries);
+                                foreach(var f in fielders)
+                                {
+                                    var fName = f.Trim();
+                                    if (fName.StartsWith("sub (") && fName.EndsWith(")")) fName = fName.Substring(5, fName.Length - 6);
+                                    if (fName.ToLower() != "direct hit") 
+                                    {
+                                        GetPlayer(fName).Runouts += 1;
+                                    }
+                                }
+                            }
                         }
-                        if (dis.Contains("lbw b ") || dis.StartsWith("b ")) {
+                        
+                        // Bowled or LBW Bonus
+                        if (dis.Contains("lbw b ") || dis.StartsWith("b "))
+                        {
                             int bIdxStr = dis.LastIndexOf(" b ");
-                            if (bIdxStr >= 0) GetPlayer(dis.Substring(bIdxStr + 3).Trim()).LbwBowled += 1;
+                            if (bIdxStr >= 0)
+                            {
+                                var fName = dis.Substring(bIdxStr + 3).Trim();
+                                GetPlayer(fName).LbwBowled += 1;
+                            }
                         }
                     }
                 }
@@ -455,7 +547,7 @@ app.MapPost("/api/sync", async (FantasyDbContext db, IHttpClientFactory httpClie
             var res = CalculateD11(kvp.Value);
             db.PlayerMatchStats.Add(new PlayerMatchStat
             {
-                MatchId = matchId, MatchName = matchName, PlayerName = kvp.Key,
+                MatchId = matchId, MatchName = matchName, PlayerName = kvp.Value.Name, // Using unified name!
                 Points = res.Total,
                 StatsJson = JsonSerializer.Serialize(kvp.Value, jsonOpts),
                 BreakdownJson = JsonSerializer.Serialize(res.Breakdown, jsonOpts)
@@ -479,7 +571,7 @@ app.MapDelete("/api/sync", async (FantasyDbContext db) =>
     return Results.Ok();
 });
 
-app.Run("http://localhost:5000");
+app.Run(url);
 
 // ==========================================
 // DREAM11 ENGINE LOGIC
